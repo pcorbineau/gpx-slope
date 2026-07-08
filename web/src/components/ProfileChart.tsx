@@ -125,6 +125,12 @@ export default function ProfileChart({
     };
   }, [course]);
 
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.redraw();
+    }
+  }, [highlightRange, highlightColor]);
+
   return (
     <div className="chart-wrapper" ref={containerRef}>
       <div className="crosshair-label">Survolez le graphique</div>
