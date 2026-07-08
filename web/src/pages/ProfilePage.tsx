@@ -72,8 +72,8 @@ export default function ProfilePage() {
   }, []);
 
   const course = data.course;
-  const highlightRange = highlightSection
-    ? [highlightSection.start_km, highlightSection.end_km] as [number, number]
+  const highlightRange = highlightSection && course
+    ? [course.km[highlightSection.idx_start], course.km[highlightSection.idx_end]] as [number, number]
     : null;
 
   return (

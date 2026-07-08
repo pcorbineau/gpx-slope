@@ -96,10 +96,15 @@ export default function ProfileChart({
           (u) => {
             const h = highlightRef.current;
             if (!h) return;
+            
+            // valToPos returns position relative to bbox, not absolute canvas position
             const p0 = u.valToPos(h.range[0], "x");
             const p1 = u.valToPos(h.range[1], "x");
-            const left = Math.min(p0, p1);
+            
+            // Add bbox.left offset to get absolute canvas position
+            const left = Math.min(p0, p1) + u.bbox.left;
             const width = Math.abs(p1 - p0);
+            
             const { ctx } = u;
             ctx.fillStyle = h.color;
             ctx.fillRect(left, u.bbox.top, width, u.bbox.height);
