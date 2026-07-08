@@ -239,29 +239,50 @@ export function detectMacroSections(
     }
   }
 
-  // Step 5b: trim each run at its elevation extremum
-  //   - up run: ends at highest elevation (peak), not where slope crosses threshold
-  //   - down run: ends at lowest elevation (valley)
-  //   - remainder after extremum becomes a neutral run (re-evaluated by flatThreshold)
+  // Step 5b: split runs at significant local direction reversals
+  //   - within a down run: find local minima where the following climb >= minDeniv
+  //   - within an up run: find local maxima where the following drop >= minDeniv
+  //   - this preserves real climbs within a big descent (and vice versa)
   const trimmed: Run[] = [];
   for (const run of final) {
-    if (run.dir === "up") {
-      let maxIdx = run.i0;
-      for (let k = run.i0; k <= run.i1; k++) {
-        if (ele[k] > ele[maxIdx]) maxIdx = k;
+    if (run.dir === "down") {
+      let segStart = run.i0;
+      for (let k = run.i0 + 1; k < run.i1; k++) {
+        if (ele[k] < ele[k - 1] && ele[k] <= ele[k + 1]) {
+          // Local minimum at k — find the following peak
+          let peakK = k + 1;
+          while (peakK < run.i1 && ele[peakK] >= ele[peakK - 1]) peakK++;
+          peakK--;
+          const rise = ele[peakK] - ele[k];
+          if (rise >= minDeniv) {
+            const drop = ele[k] - ele[segStart];
+            trimmed.push({ dir: drop <= 0 ? "down" : "flat", i0: segStart, i1: k });
+            segStart = k;
+          }
+        }
       }
-      trimmed.push({ dir: "up", i0: run.i0, i1: maxIdx });
-      if (maxIdx < run.i1) {
-        trimmed.push({ dir: "flat", i0: maxIdx, i1: run.i1 });
+      if (segStart < run.i1) {
+        const drop = ele[run.i1] - ele[segStart];
+        trimmed.push({ dir: drop <= 0 ? "down" : "flat", i0: segStart, i1: run.i1 });
       }
-    } else if (run.dir === "down") {
-      let minIdx = run.i1;
-      for (let k = run.i0; k <= run.i1; k++) {
-        if (ele[k] < ele[minIdx]) minIdx = k;
+    } else if (run.dir === "up") {
+      let segStart = run.i0;
+      for (let k = run.i0 + 1; k < run.i1; k++) {
+        if (ele[k] > ele[k - 1] && ele[k] >= ele[k + 1]) {
+          let valleyK = k + 1;
+          while (valleyK < run.i1 && ele[valleyK] <= ele[valleyK - 1]) valleyK++;
+          valleyK--;
+          const drop = ele[k] - ele[valleyK];
+          if (drop >= minDeniv) {
+            const rise = ele[k] - ele[segStart];
+            trimmed.push({ dir: rise >= 0 ? "up" : "flat", i0: segStart, i1: k });
+            segStart = k;
+          }
+        }
       }
-      trimmed.push({ dir: "down", i0: run.i0, i1: minIdx });
-      if (minIdx < run.i1) {
-        trimmed.push({ dir: "flat", i0: minIdx, i1: run.i1 });
+      if (segStart < run.i1) {
+        const rise = ele[run.i1] - ele[segStart];
+        trimmed.push({ dir: rise >= 0 ? "up" : "flat", i0: segStart, i1: run.i1 });
       }
     } else {
       trimmed.push({ ...run });
