@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SectionData } from "../lib/types";
 
 interface Props {
@@ -6,8 +7,57 @@ interface Props {
   onClickSection: (n: number) => void;
 }
 
+type SortKey = keyof SectionData;
+type SortDir = "asc" | "desc";
+
+function getSortValue(s: SectionData, key: SortKey): number | string {
+  switch (key) {
+    case "n": return s.n;
+    case "dir": return s.dir === "up" ? "Montée" : "Descente";
+    case "start_km": return s.start_km;
+    case "dist_km": return s.dist_km;
+    case "deniv": return s.deniv;
+    case "avg": return Math.abs(s.avg);
+    case "pente_min": return Math.abs(s.pente_min);
+    case "pente_max": return Math.abs(s.pente_max);
+    default: return (s as any)[key] ?? 0;
+  }
+}
+
+const columns: { key: SortKey; label: string }[] = [
+  { key: "n", label: "#" },
+  { key: "dir", label: "Type" },
+  { key: "start_km", label: "Début course" },
+  { key: "dist_km", label: "Dist." },
+  { key: "deniv", label: "Déniv." },
+  { key: "avg", label: "Pente moy." },
+  { key: "pente_min", label: "Pente min" },
+  { key: "pente_max", label: "Pente max" },
+];
+
 export default function SectionsTable({ sections, onHoverSection, onClickSection }: Props) {
+  const [sortKey, setSortKey] = useState<SortKey>("n");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
   if (sections.length === 0) return null;
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = [...sections].sort((a, b) => {
+    const va = getSortValue(a, sortKey);
+    const vb = getSortValue(b, sortKey);
+    if (typeof va === "string" && typeof vb === "string") {
+      return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return sortDir === "asc" ? (va as number) - (vb as number) : (vb as number) - (va as number);
+  });
 
   return (
     <table style={{
@@ -22,16 +72,26 @@ export default function SectionsTable({ sections, onHoverSection, onClickSection
     }}>
       <thead>
         <tr style={{ background: "#1a1a2e", color: "#fff" }}>
-          <th style={thStyle}>#</th>
-          <th style={thStyle}>Type</th>
-          <th style={thStyle}>Début course</th>
-          <th style={thStyle}>Dist.</th>
-          <th style={thStyle}>Déniv.</th>
-          <th style={thStyle}>Pente moy.</th>
+          {columns.map((col) => (
+            <th
+              key={col.key}
+              onClick={() => handleSort(col.key)}
+              style={{
+                ...thStyle,
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
+              {col.label}
+              {sortKey === col.key && (
+                <span style={{ marginLeft: 4 }}>{sortDir === "asc" ? "▲" : "▼"}</span>
+              )}
+            </th>
+          ))}
         </tr>
       </thead>
       <tbody>
-        {sections.map((s) => (
+        {sorted.map((s) => (
           <tr
             key={s.n}
             onClick={() => onClickSection(s.n)}
@@ -52,6 +112,8 @@ export default function SectionsTable({ sections, onHoverSection, onClickSection
               {s.deniv > 0 ? "+" : ""}{s.deniv.toFixed(0)} m
             </td>
             <td style={tdStyle}>{s.avg.toFixed(1)} %</td>
+            <td style={tdStyle}>{s.pente_min.toFixed(1)} %</td>
+            <td style={tdStyle}>{s.pente_max.toFixed(1)} %</td>
           </tr>
         ))}
       </tbody>

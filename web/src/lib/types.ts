@@ -16,6 +16,8 @@ export interface SectionData {
   dist_km: number;
   deniv: number;
   avg: number;
+  pente_min: number;
+  pente_max: number;
   idx_start: number;
   idx_end: number;
 }

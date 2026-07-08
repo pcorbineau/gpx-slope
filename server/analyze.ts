@@ -149,6 +149,8 @@ export interface SectionData {
   dist_km: number;
   deniv: number;
   avg: number;
+  pente_min: number;
+  pente_max: number;
   idx_start: number;
   idx_end: number;
 }
@@ -250,6 +252,14 @@ export function analyzeGpx(
     const deniv = seg.steps.reduce((sum, st) => sum + st.dh, 0);
     const avg = (deniv / distSeg) * 100;
 
+    let pente_min = Infinity;
+    let pente_max = -Infinity;
+    for (let k = idxs[0]; k <= idxs[idxs.length - 1]; k++) {
+      const v = slopes[k];
+      if (v < pente_min) pente_min = v;
+      if (v > pente_max) pente_max = v;
+    }
+
     return {
       n: n + 1,
       dir: seg.dir as "up" | "down",
@@ -258,6 +268,8 @@ export function analyzeGpx(
       dist_km: Math.round((distSeg / 1000) * 1000) / 1000,
       deniv: Math.round(deniv * 10) / 10,
       avg: Math.round(avg * 10) / 10,
+      pente_min: Math.round(pente_min * 10) / 10,
+      pente_max: Math.round(pente_max * 10) / 10,
       idx_start: idxs[0],
       idx_end: idxs[idxs.length - 1],
     };
