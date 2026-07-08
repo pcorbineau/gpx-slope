@@ -254,6 +254,53 @@ export function buildSectionsFromAnchors(
   return sections;
 }
 
+export function mergeFlatSections(sections: SectionData[], maxFlatDistM: number): SectionData[] {
+  const result: SectionData[] = [];
+
+  for (const s of sections) {
+    if (result.length === 0) {
+      result.push({ ...s });
+      continue;
+    }
+
+    const prev = result[result.length - 1];
+
+    if (s.dir === "flat" && s.dist_km * 1000 <= maxFlatDistM) {
+      const dist = (s.end_km - prev.start_km) * 1000;
+      const deniv = s.deniv + prev.deniv;
+      const avg = dist > 0 ? (deniv / dist) * 100 : 0;
+      prev.idx_end = s.idx_end;
+      prev.end_km = s.end_km;
+      prev.dist_km = Math.round((dist / 1000) * 1000) / 1000;
+      prev.deniv = Math.round(deniv * 10) / 10;
+      prev.avg = Math.round(avg * 10) / 10;
+      prev.pente_min = Math.min(prev.pente_min, s.pente_min);
+      prev.pente_max = Math.max(prev.pente_max, s.pente_max);
+    } else if (prev.dir === "flat" && prev.dist_km * 1000 <= maxFlatDistM && s.dir !== "flat") {
+      const dist = (s.end_km - prev.start_km) * 1000;
+      const deniv = s.deniv + prev.deniv;
+      const avg = dist > 0 ? (deniv / dist) * 100 : 0;
+      result[result.length - 1] = {
+        n: 0,
+        dir: s.dir,
+        start_km: prev.start_km,
+        end_km: s.end_km,
+        dist_km: Math.round((dist / 1000) * 1000) / 1000,
+        deniv: Math.round(deniv * 10) / 10,
+        avg: Math.round(avg * 10) / 10,
+        pente_min: Math.min(prev.pente_min, s.pente_min),
+        pente_max: Math.max(prev.pente_max, s.pente_max),
+        idx_start: prev.idx_start,
+        idx_end: s.idx_end,
+      };
+    } else {
+      result.push({ ...s });
+    }
+  }
+
+  return result.map((s, i) => ({ ...s, n: i + 1 }));
+}
+
 // -- Public API ------------------------------------------------------------
 export interface CourseData {
   km: number[];
@@ -296,107 +343,17 @@ export function analyzeGpx(
   const eleSmoothed = smoothElevation(pts, xs, 40);
   const slopes = computeSlopes(xs, eleSmoothed, 60);
 
-  const steps: Step[] = [];
-  for (let i = 1; i < pts.length; i++) {
-    const d = xs[i] - xs[i - 1];
-    const dh = eleSmoothed[i] - eleSmoothed[i - 1];
-    steps.push({
-      d,
-      dh,
-      km: xs[i],
-      i0: i - 1,
-      i1: i,
-      slope: (slopes[i - 1] + slopes[i]) / 2,
-      dir: null,
-    });
-  }
+  const MIN_PEAK_DENIV = 30;
+  const FLAT_THRESHOLD = 3;
+  const MAX_FLAT_MERGE_M = 500;
 
-  const upThr = 2.0;
-  const downThr = -2.0;
-  let lastDir: Step["dir"] = null;
-  for (const s of steps) {
-    if (s.dh > upThr) {
-      s.dir = "up";
-      lastDir = "up";
-    } else if (s.dh < downThr) {
-      s.dir = "down";
-      lastDir = "down";
-    } else {
-      s.dir = lastDir ?? "flat";
-    }
-  }
+  const anchors_raw = findLocalExtrema(eleSmoothed, xs);
+  const anchors = filterAnchors(anchors_raw, eleSmoothed, xs, MIN_PEAK_DENIV);
+  let sections = buildSectionsFromAnchors(pts, xs, eleSmoothed, slopes, anchors, FLAT_THRESHOLD);
+  sections = mergeFlatSections(sections, MAX_FLAT_MERGE_M);
 
-  interface Segment {
-    dir: "up" | "down";
-    steps: Step[];
-    start_km: number;
-    end_km: number;
-  }
-  const segs: Segment[] = [];
-  let cur: Segment | null = null;
-
-  for (const s of steps) {
-    if (s.d === 0) continue;
-    if (!cur) {
-      cur = {
-        dir: s.dir as "up" | "down",
-        steps: [s],
-        start_km: s.km - s.d,
-        end_km: s.km,
-      };
-    } else if (s.dir === cur.dir) {
-      cur.steps.push(s);
-      cur.end_km = s.km;
-    } else {
-      segs.push(cur);
-      cur = {
-        dir: s.dir as "up" | "down",
-        steps: [s],
-        start_km: s.km - s.d,
-        end_km: s.km,
-      };
-    }
-  }
-  if (cur) segs.push(cur);
-
-  const filtered = segs.filter((seg) => {
-    const dist = seg.steps.reduce((sum, st) => sum + st.d, 0);
-    const dh = seg.steps.reduce((sum, st) => sum + st.dh, 0);
-    return dist > minDistM && Math.abs(dh) > minDenivM;
-  });
-
-  const sections: SectionData[] = filtered.map((seg, n) => {
-    const idxsSet = new Set<number>();
-    for (const st of seg.steps) {
-      idxsSet.add(st.i0);
-      idxsSet.add(st.i1);
-    }
-    const idxs = Array.from(idxsSet).sort((a, b) => a - b);
-    const distSeg = seg.steps.reduce((sum, st) => sum + st.d, 0);
-    const deniv = seg.steps.reduce((sum, st) => sum + st.dh, 0);
-    const avg = (deniv / distSeg) * 100;
-
-    let pente_min = Infinity;
-    let pente_max = -Infinity;
-    for (let k = idxs[0]; k <= idxs[idxs.length - 1]; k++) {
-      const v = slopes[k];
-      if (v < pente_min) pente_min = v;
-      if (v > pente_max) pente_max = v;
-    }
-
-    return {
-      n: n + 1,
-      dir: seg.dir as "up" | "down",
-      start_km: Math.round((xs[idxs[0]] / 1000) * 1000) / 1000,
-      end_km: Math.round((xs[idxs[idxs.length - 1]] / 1000) * 1000) / 1000,
-      dist_km: Math.round((distSeg / 1000) * 1000) / 1000,
-      deniv: Math.round(deniv * 10) / 10,
-      avg: Math.round(avg * 10) / 10,
-      pente_min: Math.round(pente_min * 10) / 10,
-      pente_max: Math.round(pente_max * 10) / 10,
-      idx_start: idxs[0],
-      idx_end: idxs[idxs.length - 1],
-    };
+  const filtered = sections.filter((s) => {
+    return s.dist_km * 1000 > minDistM && Math.abs(s.deniv) > minDenivM;
   });
 
   return {
@@ -409,6 +366,6 @@ export function analyzeGpx(
       name,
       total_km: Math.round((xs[xs.length - 1] / 1000) * 100) / 100,
     },
-    sections,
+    sections: filtered,
   };
 }
