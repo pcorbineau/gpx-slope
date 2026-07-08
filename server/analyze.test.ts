@@ -1,8 +1,38 @@
 import { describe, it, expect } from "bun:test";
-import { analyzeGpx } from "./analyze";
+import { analyzeGpx, findLocalExtrema } from "./analyze";
 import { join } from "path";
 
 const FIXTURE = join(import.meta.dir, "__fixtures__", "simple.gpx");
+
+describe("findLocalExtrema", () => {
+  it("finds peaks and valleys in a simple profile", () => {
+    const ele = [100, 200, 300, 200, 100, 200, 300, 200, 100];
+    const km = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+    const anchors = findLocalExtrema(ele, km);
+    const peaks = anchors.filter((a) => a.type === "peak");
+    const valleys = anchors.filter((a) => a.type === "valley");
+    expect(peaks.length).toBe(2);
+    expect(valleys.length).toBe(1);
+    expect(peaks[0].index).toBe(2);
+    expect(peaks[1].index).toBe(6);
+    expect(valleys[0].index).toBe(4);
+  });
+
+  it("returns empty for flat profile", () => {
+    const ele = [100, 100, 100, 100, 100];
+    const km = [0, 1, 2, 3, 4];
+    expect(findLocalExtrema(ele, km)).toEqual([]);
+  });
+
+  it("detects plateau-start as peak", () => {
+    const ele = [100, 200, 300, 300, 300, 200, 100];
+    const km = [0, 1, 2, 3, 4, 5, 6];
+    const anchors = findLocalExtrema(ele, km);
+    const peaks = anchors.filter((a) => a.type === "peak");
+    expect(peaks.length).toBe(1);
+    expect(peaks[0].index).toBe(2);
+  });
+});
 
 describe("analyzeGpx", () => {
   it("returns course and sections for a valid GPX", () => {

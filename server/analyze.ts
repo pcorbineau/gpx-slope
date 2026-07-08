@@ -127,6 +127,25 @@ interface Anchor {
   ele: number;
 }
 
+export function findLocalExtrema(ele: number[], km: number[]): Anchor[] {
+  const n = ele.length;
+  const anchors: Anchor[] = [];
+
+  for (let i = 1; i < n - 1; i++) {
+    const curr = ele[i];
+    const prev = ele[i - 1];
+    const next = ele[i + 1];
+
+    if (curr > prev && curr >= next) {
+      anchors.push({ type: "peak", index: i, km: km[i], ele: curr });
+    } else if (curr < prev && curr <= next) {
+      anchors.push({ type: "valley", index: i, km: km[i], ele: curr });
+    }
+  }
+
+  return anchors;
+}
+
 // -- Section detection -----------------------------------------------------
 interface Step {
   d: number;
