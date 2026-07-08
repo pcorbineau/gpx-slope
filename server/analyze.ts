@@ -429,15 +429,35 @@ export function analyzeGpx(
 
   const MIN_PEAK_DENIV = 30;
   const FLAT_THRESHOLD = 3;
-  const MAX_FLAT_MERGE_M = 500;
+  const MAX_FLAT_MERGE_M = 1000;
 
   let sections = detectMacroSections(xs, eleSmoothed, slopes, MIN_PEAK_DENIV, FLAT_THRESHOLD);
   sections = mergeFlatSections(sections, MAX_FLAT_MERGE_M);
 
-  const filtered = sections.filter((s) => {
+  let filtered = sections.filter((s) => {
     if (s.dir === "flat") return s.dist_km * 1000 > minDistM;
     return s.dist_km * 1000 > minDistM && Math.abs(s.deniv) > minDenivM;
   });
+
+  // Merge adjacent same-type sections (filtering may have removed gaps between them)
+  const merged: SectionData[] = [];
+  for (const s of filtered) {
+    if (merged.length > 0 && merged[merged.length - 1].dir === s.dir) {
+      const prev = merged[merged.length - 1];
+      const dist = (s.end_km - prev.start_km) * 1000;
+      const deniv = s.deniv + prev.deniv;
+      const avg = dist > 0 ? (deniv / dist) * 100 : 0;
+      prev.end_km = s.end_km;
+      prev.dist_km = Math.round((dist / 1000) * 1000) / 1000;
+      prev.deniv = Math.round(deniv * 10) / 10;
+      prev.avg = Math.round(avg * 10) / 10;
+      prev.pente_min = Math.min(prev.pente_min, s.pente_min);
+      prev.pente_max = Math.max(prev.pente_max, s.pente_max);
+    } else {
+      merged.push({ ...s });
+    }
+  }
+  filtered = merged.map((s, i) => ({ ...s, n: i + 1 }));
 
   return {
     course: {
