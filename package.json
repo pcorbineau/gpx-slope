@@ -1,0 +1,15 @@
+{
+  "name": "gpx-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --hot server/index.ts",
+    "build:web": "cd web && bun run build",
+    "dev:web": "cd web && bun run dev"
+  },
+  "dependencies": {
+    "elysia": "^1.2",
+    "typescript": "^5.7",
+    "@types/bun": "^1.2"
+  }
+}
