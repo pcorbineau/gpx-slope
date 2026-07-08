@@ -126,48 +126,74 @@ export function detectMacroSections(
   minDeniv: number,
   flatThreshold: number
 ): SectionData[] {
-  const n = ele.length;
-  const raw: { i0: number; i1: number; dir: "up" | "down" | "flat" }[] = [];
+  const n = slopes.length;
 
-  let segStart = 0;
-  let dir: "up" | "down" | "flat" | null = null;
-  let extremeIdx = 0;
+  // Step 1: classify each point by local slope
+  const SLOPE_UP = 2.0;
+  const SLOPE_DOWN = -2.0;
+  const MIN_ABSORB_M = 300;
 
+  const rawDir: ("up" | "down" | "flat")[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    if (slopes[i] > SLOPE_UP) rawDir[i] = "up";
+    else if (slopes[i] < SLOPE_DOWN) rawDir[i] = "down";
+    else rawDir[i] = "flat";
+  }
+
+  // Step 2: group consecutive same-direction into runs
+  interface Run { dir: "up" | "down" | "flat"; i0: number; i1: number; }
+  const runs: Run[] = [];
+  let start = 0;
   for (let i = 1; i < n; i++) {
-    if (dir === null) {
-      const cum = ele[i] - ele[segStart];
-      if (Math.abs(cum) >= minDeniv) {
-        dir = cum > 0 ? "up" : "down";
-        extremeIdx = i;
-      }
-    } else if (dir === "up") {
-      if (ele[i] > ele[extremeIdx]) extremeIdx = i;
-      if (ele[extremeIdx] - ele[i] >= minDeniv) {
-        raw.push({ i0: segStart, i1: extremeIdx, dir });
-        segStart = extremeIdx;
-        dir = null;
-        extremeIdx = segStart;
-      }
-    } else if (dir === "down") {
-      if (ele[i] < ele[extremeIdx]) extremeIdx = i;
-      if (ele[i] - ele[extremeIdx] >= minDeniv) {
-        raw.push({ i0: segStart, i1: extremeIdx, dir });
-        segStart = extremeIdx;
-        dir = null;
-        extremeIdx = segStart;
-      }
+    if (rawDir[i] !== rawDir[start]) {
+      runs.push({ dir: rawDir[start], i0: start, i1: i - 1 });
+      start = i;
+    }
+  }
+  runs.push({ dir: rawDir[start], i0: start, i1: n - 1 });
+
+  // Step 3: merge same-type adjacent runs
+  const merged: Run[] = [];
+  for (const run of runs) {
+    if (merged.length > 0 && merged[merged.length - 1].dir === run.dir) {
+      merged[merged.length - 1].i1 = run.i1;
+    } else {
+      merged.push({ ...run });
     }
   }
 
-  if (dir !== null) {
-    raw.push({ i0: segStart, i1: extremeIdx, dir });
+  // Step 4: absorb short flat runs (< 300m) into longer neighbor
+  for (let i = 0; i < merged.length; i++) {
+    const run = merged[i];
+    if (run.dir !== "flat") continue;
+    const dist = xs[run.i1] - xs[run.i0];
+    if (dist >= MIN_ABSORB_M) continue;
+    if (merged.length <= 1) break;
+
+    const prev = i > 0 ? merged[i - 1] : null;
+    const next = i < merged.length - 1 ? merged[i + 1] : null;
+    const target = prev ?? next;
+    if (!target) continue;
+
+    target.i0 = Math.min(target.i0, run.i0);
+    target.i1 = Math.max(target.i1, run.i1);
+    merged.splice(i, 1);
+    i--;
   }
 
+  // Step 5: rebuild after absorption (merge same-type consecutive)
+  const final: Run[] = [];
+  for (const run of merged) {
+    if (final.length > 0 && final[final.length - 1].dir === run.dir) {
+      final[final.length - 1].i1 = run.i1;
+    } else {
+      final.push({ ...run });
+    }
+  }
+
+  // Step 6: build SectionData
   const sections: SectionData[] = [];
-
-  for (let r = 0; r < raw.length; r++) {
-    const { i0, i1, dir: d } = raw[r];
-
+  for (const { dir, i0, i1 } of final) {
     const dist = xs[i1] - xs[i0];
     const deniv = ele[i1] - ele[i0];
     const avg = dist > 0 ? (deniv / dist) * 100 : 0;
@@ -185,7 +211,7 @@ export function detectMacroSections(
     if (Math.abs(avg) <= flatThreshold && !steepUp && !steepDown) {
       dirFinal = "flat";
     } else {
-      dirFinal = d;
+      dirFinal = dir;
     }
 
     sections.push({
@@ -303,6 +329,7 @@ export function analyzeGpx(
   sections = mergeFlatSections(sections, MAX_FLAT_MERGE_M);
 
   const filtered = sections.filter((s) => {
+    if (s.dir === "flat") return s.dist_km * 1000 > minDistM;
     return s.dist_km * 1000 > minDistM && Math.abs(s.deniv) > minDenivM;
   });
 
