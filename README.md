@@ -37,10 +37,8 @@ cd web && bun run build
 
 - **Full-course profile** with zoom (mouse wheel, drag, double-click reset) and range slider
 - **Slope coloring** with Tour-de-France scale (green / blue / yellow / orange / red / black)
-- **Custom crosshair** — vertical line + label (km, altitude, slope %) following the cursor
-- **Sections table** — detected climbs and descents with distance, elevation gain, average slope
-  - Hover a row → highlights the section on the profile
-  - Click a row → opens the dedicated per-section page
+- **Custom crosshair** — label (km, altitude, slope %) snapped to the elevation line on both the full profile and per-section pages
+- **Sections table** — detected climbs and descents with distance, elevation gain, average/min/max slope, and table-wide sorting by any column
 - **Upload any GPX** — analysis runs in background, progress via WebSocket
 - **Adjustable thresholds** — minimum distance and elevation for section detection
 - **Persistence** — last GPX, config, and computed result cached on disk
