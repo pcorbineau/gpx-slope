@@ -172,18 +172,20 @@ export function detectMacroSections(
     const deniv = ele[i1] - ele[i0];
     const avg = dist > 0 ? (deniv / dist) * 100 : 0;
 
-    let dirFinal: "up" | "down" | "flat";
-    if (Math.abs(avg) <= flatThreshold) {
-      dirFinal = "flat";
-    } else {
-      dirFinal = d;
-    }
-
     let pente_min = Infinity;
     let pente_max = -Infinity;
     for (let k = i0; k <= i1; k++) {
       if (slopes[k] < pente_min) pente_min = slopes[k];
       if (slopes[k] > pente_max) pente_max = slopes[k];
+    }
+
+    let dirFinal: "up" | "down" | "flat";
+    const steepUp = pente_max > 10;
+    const steepDown = pente_min < -10;
+    if (Math.abs(avg) <= flatThreshold && !steepUp && !steepDown) {
+      dirFinal = "flat";
+    } else {
+      dirFinal = d;
     }
 
     sections.push({
