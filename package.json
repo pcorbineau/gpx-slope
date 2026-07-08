@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "bun run --hot server/index.ts",
-    "build:web": "cd web && bun run build",
-    "dev:web": "cd web && bun run dev"
+    "dev:server": "bun run --hot server/index.ts",
+    "dev:web": "cd web && bun run dev",
+    "build": "cd web && bun run build",
+    "test": "bun test server/",
+    "typecheck": "cd server && bun run tsc --noEmit && cd ../web && bun run tsc --noEmit"
   },
   "dependencies": {
     "elysia": "^1.2",
