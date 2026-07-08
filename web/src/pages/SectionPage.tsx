@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import type { AnalysisResult } from "../lib/types";
 import { fetchData } from "../lib/api";
@@ -16,6 +16,8 @@ export default function SectionPage() {
   useEffect(() => {
     fetchData().then(setData).catch(console.error);
   }, []);
+
+  const chartWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!data?.course || !chartEl) return;
@@ -72,7 +74,12 @@ export default function SectionPage() {
       {
         width: chartEl.clientWidth,
         height: 560,
-        cursor: { drag: { x: true, y: true }, points: { show: false } },
+        cursor: {
+          show: true,
+          drag: { x: true, y: true },
+          y: false,
+          points: { show: true, size: 6 },
+        },
         legend: { show: false },
         scales: {
           x: { range: [km[0], km[km.length - 1]] },
@@ -82,6 +89,20 @@ export default function SectionPage() {
           { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Altitude (m)" },
         ],
         series: [{}, ...series.map((s) => ({ ...s }))],
+        hooks: {
+          setCursor: [
+            (u) => {
+              const label = chartWrapperRef.current?.querySelector(".crosshair-label") as HTMLElement | null;
+              if (!label || u.cursor.idx == null) return;
+              const idx: number = u.cursor.idx;
+              const kmVal = km[idx];
+              const eleVal = ele[idx];
+              const slopeVal = slope[idx];
+              label.textContent =
+                `km ${kmVal.toFixed(2)} · alt ${eleVal.toFixed(0)} m · pente ${slopeVal.toFixed(1)} %`;
+            },
+          ],
+        },
       },
       rawData as AlignedData,
       chartEl
@@ -153,17 +174,20 @@ export default function SectionPage() {
           ))}
         </div>
 
-        <div
-          ref={setChartEl}
-          style={{
-            width: "100%",
-            height: 560,
-            background: "#fff",
-            borderRadius: 8,
-            boxShadow: "0 1px 4px rgba(0,0,0,.1)",
-          }}
-        >
-          {!data && <div style={{ textAlign: "center", padding: 60, color: "#888" }}>Chargement...</div>}
+        <div className="chart-wrapper" ref={chartWrapperRef}>
+          <div className="crosshair-label">Survolez le graphique</div>
+          <div
+            ref={setChartEl}
+            style={{
+              width: "100%",
+              height: 560,
+              background: "#fff",
+              borderRadius: 8,
+              boxShadow: "0 1px 4px rgba(0,0,0,.1)",
+            }}
+          >
+            {!data && <div style={{ textAlign: "center", padding: 60, color: "#888" }}>Chargement...</div>}
+          </div>
         </div>
       </div>
     </div>

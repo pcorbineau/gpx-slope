@@ -70,7 +70,8 @@ export default function ProfileChart({
       cursor: {
         show: true,
         drag: { x: true, y: true },
-        points: { show: false },
+        y: false,
+        points: { show: true, size: 6 },
       },
       select: { show: false } as uPlot.Select,
       legend: { show: false },
