@@ -239,9 +239,48 @@ export function detectMacroSections(
     }
   }
 
+  // Step 5b: trim each run at its elevation extremum
+  //   - up run: ends at highest elevation (peak), not where slope crosses threshold
+  //   - down run: ends at lowest elevation (valley)
+  //   - remainder after extremum becomes a neutral run (re-evaluated by flatThreshold)
+  const trimmed: Run[] = [];
+  for (const run of final) {
+    if (run.dir === "up") {
+      let maxIdx = run.i0;
+      for (let k = run.i0; k <= run.i1; k++) {
+        if (ele[k] > ele[maxIdx]) maxIdx = k;
+      }
+      trimmed.push({ dir: "up", i0: run.i0, i1: maxIdx });
+      if (maxIdx < run.i1) {
+        trimmed.push({ dir: "flat", i0: maxIdx, i1: run.i1 });
+      }
+    } else if (run.dir === "down") {
+      let minIdx = run.i1;
+      for (let k = run.i0; k <= run.i1; k++) {
+        if (ele[k] < ele[minIdx]) minIdx = k;
+      }
+      trimmed.push({ dir: "down", i0: run.i0, i1: minIdx });
+      if (minIdx < run.i1) {
+        trimmed.push({ dir: "flat", i0: minIdx, i1: run.i1 });
+      }
+    } else {
+      trimmed.push({ ...run });
+    }
+  }
+
+  // Step 5c: rebuild after trimming (merge same-type consecutive)
+  const rebuilt: Run[] = [];
+  for (const run of trimmed) {
+    if (rebuilt.length > 0 && rebuilt[rebuilt.length - 1].dir === run.dir) {
+      rebuilt[rebuilt.length - 1].i1 = run.i1;
+    } else {
+      rebuilt.push({ ...run });
+    }
+  }
+
   // Step 6: build SectionData
   const sections: SectionData[] = [];
-  for (const { dir, i0, i1 } of final) {
+  for (const { dir, i0, i1 } of rebuilt) {
     const dist = xs[i1] - xs[i0];
     const deniv = ele[i1] - ele[i0];
     const avg = dist > 0 ? (deniv / dist) * 100 : 0;
@@ -276,7 +315,27 @@ export function detectMacroSections(
     });
   }
 
-  return sections;
+  // Step 7: merge adjacent same-type sections (reclassified flat may create dupes)
+  const merged_sections: SectionData[] = [];
+  for (const s of sections) {
+    if (merged_sections.length > 0 && merged_sections[merged_sections.length - 1].dir === s.dir) {
+      const prev = merged_sections[merged_sections.length - 1];
+      const dist = (s.end_km - prev.start_km) * 1000;
+      const deniv = s.deniv + prev.deniv;
+      const avg = dist > 0 ? (deniv / dist) * 100 : 0;
+      prev.idx_end = s.idx_end;
+      prev.end_km = s.end_km;
+      prev.dist_km = Math.round((dist / 1000) * 1000) / 1000;
+      prev.deniv = Math.round(deniv * 10) / 10;
+      prev.avg = Math.round(avg * 10) / 10;
+      prev.pente_min = Math.min(prev.pente_min, s.pente_min);
+      prev.pente_max = Math.max(prev.pente_max, s.pente_max);
+    } else {
+      merged_sections.push({ ...s });
+    }
+  }
+
+  return merged_sections;
 }
 
 export function mergeFlatSections(sections: SectionData[], maxFlatDistM: number): SectionData[] {
