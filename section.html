@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Section - Festival des Hospitaliers</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f5f6f8; color: #222; }
+  header { background: #1a1a2e; color: #fff; padding: 16px 24px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { margin: 0; font-size: 20px; }
+  header a { color: #8fd; text-decoration: none; font-size: 14px; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  #plot { width: 100%; height: 560px; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .infos { display:flex; gap: 20px; flex-wrap: wrap; margin: 14px 0; }
+  .card { background:#fff; border-radius:8px; padding:12px 16px; box-shadow:0 1px 4px rgba(0,0,0,.1); font-size:14px; }
+  .card b { display:block; font-size:11px; text-transform:uppercase; opacity:.6; margin-bottom:4px; }
+  .mon { color:#2ca25f; } .des { color:#d73027; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin: 10px 0; font-size:13px; }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .sw { width:16px; height:16px; border-radius:3px; display:inline-block; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Section</h1>
+  <a href="index.html">← Retour au profil complet</a>
+</header>
+<div class="container">
+  <div class="infos" id="infos"></div>
+  <div class="legend">
+    <span><i class="sw" style="background:#2ca25f"></i>&lt; 3%</span>
+    <span><i class="sw" style="background:#1f77b4"></i>3-10%</span>
+    <span><i class="sw" style="background:#fee08b"></i>10-15%</span>
+    <span><i class="sw" style="background:#fc8d59"></i>15-20%</span>
+    <span><i class="sw" style="background:#d73027"></i>20-25%</span>
+    <span><i class="sw" style="background:#000"></i>&ge; 25%</span>
+  </div>
+  <div id="plot" class="empty" style="text-align:center;padding:60px;color:#888">Chargement...</div>
+</div>
+
+<script>
+const API = 'api/data';
+const N = parseInt(new URLSearchParams(location.search).get('n'), 10);
+function slopeColor(v){
+  const x=Math.abs(v);
+  if(x<3) return '#2ca25f'; if(x<10) return '#1f77b4'; if(x<15) return '#fee08b';
+  if(x<20) return '#fc8d59'; if(x<25) return '#d73027'; return '#000000';
+}
+fetch(API).then(r=>r.json()).then(D=>{
+  const s = D.sections.find(x=>x.n===N);
+  if(!s){ document.getElementById('plot').innerText='Section introuvable'; return; }
+  const a=s.idx_start, b=s.idx_end;
+  const km=D.course.km.slice(a,b+1), ele=D.course.ele.slice(a,b+1), slope=D.course.slope.slice(a,b+1);
+  document.getElementById('title').innerText=`Section ${s.n} — ${s.dir==='up'?'Montée':'Descente'} (début km ${s.start_km.toFixed(1)})`;
+  document.title = `${D.course.path || D.course.name || 'Course'} — Section ${s.n}`;
+  document.getElementById('infos').innerHTML=`
+    <div class="card"><b>Type</b><span class="${s.dir==='up'?'mon':'des'}">${s.dir==='up'?'Montée':'Descente'}</span></div>
+    <div class="card"><b>Début course</b>${s.start_km.toFixed(1)} km</div>
+    <div class="card"><b>Distance</b>${s.dist_km.toFixed(2)} km</div>
+    <div class="card"><b>Dénivelé</b>${s.deniv>0?'+':''}${s.deniv.toFixed(0)} m</div>
+    <div class="card"><b>Pente moyenne</b>${s.avg.toFixed(1)} %</div>`;
+  const eMin=Math.min(...ele), eMax=Math.max(...ele);
+  const pad=Math.max(5,(eMax-eMin)*0.06);
+  const traces=[{ x:km, y:ele, type:'scatter', mode:'lines', line:{width:0},
+    fill:'tozeroy', fillcolor:'rgba(230,230,230,0.6)', hoverinfo:'skip',
+    y0:eMin-pad }];
+  let i=1;
+  while(i<km.length){
+    const c=slopeColor(slope[i]); let j=i;
+    while(j<km.length && slopeColor(slope[j])===c) j++;
+    const xs=km.slice(i-1,j+1), ys=ele.slice(i-1,j+1), sl=slope.slice(i-1,j);
+    traces.push({ x:xs, y:ys, type:'scatter', mode:'lines', line:{color:c,width:4}, hoverinfo:'text',
+      text: xs.map((x,k)=>`km ${x.toFixed(2)}<br>alt ${ys[k].toFixed(0)} m<br>pente ${(sl[k-1]!==undefined?sl[k-1]:sl[sl.length-1]).toFixed(1)} %`), showlegend:false });
+    i=j;
+  }
+  const p=document.getElementById('plot'); p.className=''; p.id='plot';
+  Plotly.newPlot('plot', traces, { margin:{t:20,r:20,b:40,l:55}, xaxis:{title:'Distance (km)'},
+    yaxis:{title:'Altitude (m)', range:[eMin-pad, eMax+pad], fixedrange:false},
+    hovermode:'closest', dragmode:'zoom', showlegend:false }, {responsive:true});
+}).catch(e=>{ document.getElementById('plot').innerText='Erreur: '+e; });
+</script>
+</body>
+</html>

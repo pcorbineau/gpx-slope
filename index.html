@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Festival des Hospitaliers - Profil altimétrique</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f5f6f8; color: #222; }
+  header { background: #1a1a2e; color: #fff; padding: 16px 24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; opacity: .7; font-size: 13px; }
+  .toolbar { display:flex; gap:10px; align-items:center; }
+  .toolbar input[type=file] { color:#fff; font-size:12px; }
+  button { background:#3a86ff; color:#fff; border:0; padding:8px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  #plot { width: 100%; height: 620px; background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.1); cursor: none; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 12px 0; font-size: 13px; align-items: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 16px; height: 16px; border-radius: 3px; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  th, td { padding: 8px 10px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; }
+  th { background: #1a1a2e; color: #fff; }
+  tr:hover td { background: #f0f4ff; }
+  a.btn { text-decoration: none; color: #1f77b4; font-weight: 600; }
+  .mon { color: #2ca25f; } .des { color: #d73027; }
+  .hint { font-size: 12px; opacity: .6; margin-top: 6px; }
+  #overlay { position: fixed; inset:0; background: rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:50; }
+  #overlay.show { display:flex; }
+  .spinner { background:#fff; padding:24px 32px; border-radius:12px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,.3); }
+  .spinner .ring { width:46px; height:46px; border:5px solid #eee; border-top-color:#3a86ff; border-radius:50%; margin:0 auto 12px; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align:center; padding:60px 20px; color:#888; }
+  #modal { position: fixed; inset:0; background: rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:60; }
+  #modal.show { display:flex; }
+  .modal-box { background:#fff; padding:24px 28px; border-radius:12px; width:340px; box-shadow:0 4px 20px rgba(0,0,0,.3); }
+  .modal-box h3 { margin:0 0 16px; }
+  .modal-box label { display:block; font-size:13px; margin-bottom:14px; color:#444; }
+  .modal-box input { display:block; width:100%; margin-top:6px; padding:8px; border:1px solid #ccc; border-radius:6px; font-size:14px; box-sizing:border-box; }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="title">Festival des Hospitaliers</h1>
+    <p id="sub">Profil altimétrique — survolez pour la pente, zoomez à la souris, cliquez une section pour l'ouvrir.</p>
+  </div>
+  <div class="toolbar">
+    <input type="file" id="file" accept=".gpx">
+    <button id="upload">Analyser ce GPX</button>
+    <button id="settings" style="background:#444">⚙ Réglages</button>
+  </div>
+</header>
+<div class="container">
+  <div class="legend">
+    <strong>Pente :</strong>
+    <span><i class="sw" style="background:#2ca25f"></i>&lt; 3%</span>
+    <span><i class="sw" style="background:#1f77b4"></i>3-10%</span>
+    <span><i class="sw" style="background:#fee08b"></i>10-15%</span>
+    <span><i class="sw" style="background:#fc8d59"></i>15-20%</span>
+    <span><i class="sw" style="background:#d73027"></i>20-25%</span>
+    <span><i class="sw" style="background:#000"></i>&ge; 25%</span>
+  </div>
+  <div id="plot" class="empty">Aucune course chargée.<br>Uploadez un fichier GPX pour générer le profil.</div>
+  <div class="hint">Molette = zoom vertical · Shift+molette = zoom horizontal · Double-clic = reset · Cliquez une section dans le tableau pour la voir en détail.</div>
+  <table id="tbl" style="display:none">
+    <thead><tr><th>#</th><th>Type</th><th>Début course</th><th>Dist.</th><th>Déniv.</th><th>Pente moy.</th><th>Profil</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div id="overlay"><div class="spinner"><div class="ring"></div><div id="spinmsg">Analyse en cours...</div></div></div>
+
+<div id="modal"><div class="modal-box">
+  <h3>Réglages d'analyse</h3>
+  <label>Distance minimale d'une section (m)
+    <input type="number" id="min_dist" value="1200" min="0" step="50"></label>
+  <label>Dénivelé minimal d'une section (m)
+    <input type="number" id="min_deniv" value="100" min="0" step="5"></label>
+  <div class="modal-actions">
+    <button id="cancel" style="background:#888">Annuler</button>
+    <button id="recompute">Relancer l'analyse</button>
+  </div>
+</div></div>
+
+<script>
+const PLOT = document.getElementById('plot');
+let pollTimer = null;
+
+function slopeColor(s){
+  const a = Math.abs(s);
+  if (a<3) return '#2ca25f';
+  if (a<10) return '#1f77b4';
+  if (a<15) return '#fee08b';
+  if (a<20) return '#fc8d59';
+  if (a<25) return '#d73027';
+  return '#000000';
+}
+
+let COURSE = null;
+
+function drawCourse(D){
+  COURSE = D;
+  const km=D.course.km, ele=D.course.ele, slope=D.course.slope;
+  if(!km || km.length<2){ PLOT.className='empty'; PLOT.innerHTML='GPX sans points valides.'; return; }
+  document.getElementById('title').innerText = D.course.name || 'Course';
+  document.getElementById('sub').innerText =
+    `${D.course.path || ''}  ·  ${D.course.total_km} km · ${D.sections.length} sections · survolez pour la pente`;
+  PLOT.className=''; PLOT.id='plot';
+  const traces=[{ x:km, y:ele, type:'scatter', mode:'lines', line:{width:0},
+    fill:'tozeroy', fillcolor:'rgba(230,230,230,0.6)', hoverinfo:'skip', showlegend:false }];
+  let i=1;
+  while(i<km.length){
+    const c=slopeColor(slope[i]); let j=i;
+    while(j<km.length && slopeColor(slope[j])===c) j++;
+    const xs=km.slice(i-1,j+1), ys=ele.slice(i-1,j+1);
+    traces.push({ x:xs, y:ys, type:'scatter', mode:'lines', line:{color:c,width:3},
+      hoverinfo:'skip', showlegend:false });
+    i=j;
+  }
+  // invisible capture trace to detect hover anywhere
+  traces.push({ x:km, y:ele, type:'scatter', mode:'lines', line:{width:0},
+    hoverinfo:'none', showlegend:false, name:'_cap' });
+  const eMin=Math.min(...ele), eMax=Math.max(...ele);
+  const padTop=Math.max(5,(eMax-eMin)*0.06);
+  const padBot=Math.max(5,(eMax-eMin)*0.06);
+  Plotly.newPlot('plot', traces, { margin:{t:20,r:20,b:40,l:55},
+    xaxis:{title:'Distance (km)', rangeslider:{}}, yaxis:{title:'Altitude (m)', range:[eMin-padBot, eMax+padTop]},
+    hovermode:'closest', showlegend:false, dragmode:'zoom', shapes:[], annotations:[] }, {responsive:true});
+
+  const gd = document.getElementById('plot');
+  gd.on('plotly_hover', e=>{
+    const x = e.points[0].x;
+    // nearest index
+    let lo=0, hi=km.length-1;
+    // binary search
+    while(lo<hi){ const mid=(lo+hi)>>1; if(km[mid]<x) lo=mid+1; else hi=mid; }
+    const idx = Math.max(0, lo-1);
+    const yv = ele[idx], sl = slope[idx];
+    const annText = `km ${x.toFixed(2)} · alt ${yv.toFixed(0)} m · pente ${sl.toFixed(1)} %`;
+    Plotly.relayout(gd, {
+      'shapes[customcross]': { type:'line', x0:x, x1:x, yref:'paper', y0:0, y1:1,
+        line:{color:'#333', width:1.5, dash:'solid'} },
+      'annotations[customcross]': { x:x, y:1, yref:'paper', yanchor:'bottom',
+        showarrow:false, text:annText, bgcolor:'rgba(26,26,46,0.9)', font:{color:'#fff', size:12},
+        borderpad:4, xanchor:'left' }
+    });
+  });
+  gd.on('plotly_unhover', ()=>{
+    Plotly.relayout(gd, { 'shapes[customcross]': null, 'annotations[customcross]': null });
+  });
+
+  // table
+  const tb=document.querySelector('#tbl tbody'); tb.innerHTML='';
+  D.sections.forEach(s=>{
+    const tr=document.createElement('tr');
+    const type=s.dir==='up'?'<span class="mon">Montée</span>':'<span class="des">Descente</span>';
+    tr.innerHTML=`<td>${s.n}</td><td>${type}</td><td>${s.start_km.toFixed(1)} km</td>`
+      +`<td>${s.dist_km.toFixed(2)} km</td><td>${s.deniv>0?'+':''}${s.deniv.toFixed(0)} m</td>`
+      +`<td>${s.avg.toFixed(1)} %</td><td><a class="btn" href="section.html?n=${s.n}">Ouvrir →</a></td>`;
+    tr.addEventListener('mouseenter', ()=>highlightSection(s));
+    tr.addEventListener('mouseleave', clearHighlight);
+    tb.appendChild(tr);
+  });
+  document.getElementById('tbl').style.display='';
+}
+
+function highlightSection(s){
+  if(!COURSE) return;
+  const gd=document.getElementById('plot');
+  const x0=s.start_km, x1=COURSE.sections[s.n-1].end_km;
+  const col = s.dir==='up' ? 'rgba(44,162,95,0.18)' : 'rgba(215,48,39,0.18)';
+  Plotly.relayout(gd, {
+    'shapes[custsect]': { type:'rect', xref:'x', yref:'paper', x0:x0, x1:x1, y0:0, y1:1,
+      fillcolor:col, line:{width:0}, layer:'below' }
+  });
+}
+function clearHighlight(){
+  const gd=document.getElementById('plot');
+  if(gd) Plotly.relayout(gd, { 'shapes[custsect]': null });
+}
+
+function loadData(){
+  fetch('api/data').then(r=>r.json()).then(D=>{
+    if(D.course){ drawCourse(D); }
+    else { PLOT.className='empty'; PLOT.innerHTML='Aucune course chargée.<br>Uploadez un fichier GPX pour générer le profil.'; }
+  });
+}
+
+function pollStatus(){
+  fetch('api/status').then(r=>r.json()).then(st=>{
+    const ov=document.getElementById('overlay');
+    if(st.busy){ ov.classList.add('show'); document.getElementById('spinmsg').innerText=st.progress||'Analyse en cours...'; pollTimer=setTimeout(pollStatus,800); }
+    else { ov.classList.remove('show'); if(pollTimer){ clearTimeout(pollTimer); pollTimer=null; loadData(); } }
+  }).catch(()=>{ if(pollTimer) pollTimer=setTimeout(pollStatus,1500); });
+}
+
+document.getElementById('upload').addEventListener('click', ()=>{
+  const f=document.getElementById('file').files[0];
+  if(!f){ alert('Choisissez un fichier GPX'); return; }
+  const md=document.getElementById('min_dist').value||1200;
+  const mv=document.getElementById('min_deniv').value||100;
+  const fd=new FormData(); fd.append('file', f);
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('spinmsg').innerText='Envoi du fichier...';
+  fetch('api/upload?min_dist='+md+'&min_deniv='+mv,{method:'POST',body:fd}).then(r=>r.json()).then(()=>{ pollStatus(); })
+    .catch(e=>{ alert('Erreur upload: '+e); document.getElementById('overlay').classList.remove('show'); });
+});
+
+document.getElementById('settings').addEventListener('click', ()=>{
+  fetch('api/config').then(r=>r.json()).then(c=>{
+    document.getElementById('min_dist').value=c.min_dist_m;
+    document.getElementById('min_deniv').value=c.min_deniv_m;
+  }).catch(()=>{});
+  document.getElementById('modal').classList.add('show');
+});
+document.getElementById('cancel').addEventListener('click', ()=>{
+  document.getElementById('modal').classList.remove('show');
+});
+document.getElementById('recompute').addEventListener('click', ()=>{
+  const md=parseInt(document.getElementById('min_dist').value,10)||0;
+  const mv=parseInt(document.getElementById('min_deniv').value,10)||0;
+  document.getElementById('modal').classList.remove('show');
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('spinmsg').innerText='Relance de l\'analyse...';
+  fetch('api/recompute?min_dist='+md+'&min_deniv='+mv,{method:'POST'})
+    .then(()=>{ pollStatus(); })
+    .catch(e=>{ alert('Erreur: '+e); document.getElementById('overlay').classList.remove('show'); });
+});
+
+loadData();</script>
+</body>
+</html>
