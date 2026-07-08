@@ -10,10 +10,14 @@ interface Props {
 type SortKey = keyof SectionData;
 type SortDir = "asc" | "desc";
 
+function dirLabel(dir: SectionData["dir"]): string {
+  return dir === "up" ? "Montée" : dir === "down" ? "Descente" : "Plat";
+}
+
 function getSortValue(s: SectionData, key: SortKey): number | string {
   switch (key) {
     case "n": return s.n;
-    case "dir": return s.dir === "up" ? "Montée" : "Descente";
+    case "dir": return dirLabel(s.dir);
     case "start_km": return s.start_km;
     case "dist_km": return s.dist_km;
     case "deniv": return s.deniv;
@@ -102,8 +106,11 @@ export default function SectionsTable({ sections, onHoverSection, onClickSection
           >
             <td style={tdStyle}>{s.n}</td>
             <td style={tdStyle}>
-              <span style={{ color: s.dir === "up" ? "#2ca25f" : "#d73027", fontWeight: 600 }}>
-                {s.dir === "up" ? "Montée" : "Descente"}
+              <span style={{
+                color: s.dir === "up" ? "#2ca25f" : s.dir === "down" ? "#d73027" : "#888",
+                fontWeight: 600,
+              }}>
+                {dirLabel(s.dir)}
               </span>
             </td>
             <td style={tdStyle}>{s.start_km.toFixed(1)} km</td>
