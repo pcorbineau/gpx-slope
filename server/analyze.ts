@@ -128,17 +128,30 @@ export function detectMacroSections(
 ): SectionData[] {
   const n = slopes.length;
 
-  // Step 1: classify each point by local slope
-  const SLOPE_UP = 2.0;
-  const SLOPE_DOWN = -2.0;
-  const MIN_ABSORB_M = 300;
+  // Step 1: classify each point by local slope with hysteresis
+  //   - When flat: go up if slope > 2%, down if slope < -2%
+  //   - When up: stay up until slope < 0.5% (absorbs micro dips in climbs)
+  //   - When down: stay down until slope > -0.5% (absorbs micro rises in descents)
+  const HYST_ENTER = 2.0;
+  const HYST_EXIT = 0.5;
 
   const rawDir: ("up" | "down" | "flat")[] = new Array(n);
-  for (let i = 0; i < n; i++) {
-    if (slopes[i] > SLOPE_UP) rawDir[i] = "up";
-    else if (slopes[i] < SLOPE_DOWN) rawDir[i] = "down";
-    else rawDir[i] = "flat";
+  rawDir[0] = slopes[0] > HYST_ENTER ? "up" : slopes[0] < -HYST_ENTER ? "down" : "flat";
+
+  for (let i = 1; i < n; i++) {
+    const prev = rawDir[i - 1];
+    const s = slopes[i];
+
+    if (prev === "up") {
+      rawDir[i] = s < HYST_EXIT ? "flat" : "up";
+    } else if (prev === "down") {
+      rawDir[i] = s > -HYST_EXIT ? "flat" : "down";
+    } else {
+      rawDir[i] = s > HYST_ENTER ? "up" : s < -HYST_ENTER ? "down" : "flat";
+    }
   }
+
+  const MIN_ABSORB_M = 300;
 
   // Step 2: group consecutive same-direction into runs
   interface Run { dir: "up" | "down" | "flat"; i0: number; i1: number; }
@@ -162,23 +175,58 @@ export function detectMacroSections(
     }
   }
 
-  // Step 4: absorb short flat runs (< 300m) into longer neighbor
-  for (let i = 0; i < merged.length; i++) {
-    const run = merged[i];
-    if (run.dir !== "flat") continue;
-    const dist = xs[run.i1] - xs[run.i0];
-    if (dist >= MIN_ABSORB_M) continue;
-    if (merged.length <= 1) break;
+  // Step 4: absorb short runs into dominant trend
+  //   - short flat runs (< 300m) → absorb into any neighbor
+  //   - short reversals (e.g. down inside up context) → absorb into dominant neighbor
+  let changed = true;
+  while (changed) {
+    changed = false;
 
-    const prev = i > 0 ? merged[i - 1] : null;
-    const next = i < merged.length - 1 ? merged[i + 1] : null;
-    const target = prev ?? next;
-    if (!target) continue;
+    // Merge same-type adjacent runs (absorption may have made them adjacent)
+    for (let i = 1; i < merged.length; i++) {
+      if (merged[i - 1].dir === merged[i].dir) {
+        merged[i - 1].i1 = merged[i].i1;
+        merged.splice(i, 1);
+        i--;
+        changed = true;
+      }
+    }
 
-    target.i0 = Math.min(target.i0, run.i0);
-    target.i1 = Math.max(target.i1, run.i1);
-    merged.splice(i, 1);
-    i--;
+    for (let i = 0; i < merged.length; i++) {
+      const run = merged[i];
+      if (merged.length <= 1) break;
+      const dist = xs[run.i1] - xs[run.i0];
+
+      const prev = i > 0 ? merged[i - 1] : null;
+      const next = i < merged.length - 1 ? merged[i + 1] : null;
+
+      // Flat runs: absorb if short
+      if (run.dir === "flat") {
+        if (dist >= MIN_ABSORB_M) continue;
+        const target = prev ?? next;
+        if (!target) continue;
+        target.i0 = Math.min(target.i0, run.i0);
+        target.i1 = Math.max(target.i1, run.i1);
+        merged.splice(i, 1);
+        i--;
+        changed = true;
+        continue;
+      }
+
+      // Direction runs (up/down): absorb if flanked by the opposite non-flat type
+      // e.g. micro-downhill inside a climb (up-down-up) → absorb into dominant up
+      // Only absorb if the run is short (< 2km) to avoid merging genuine long descents
+      if (prev && next && prev.dir === next.dir && prev.dir !== "flat" && prev.dir !== run.dir && dist < 2000) {
+        const prevDist = xs[prev.i1] - xs[prev.i0];
+        const nextDist = xs[next.i1] - xs[next.i0];
+        const target = prevDist >= nextDist ? prev : next;
+        target.i0 = Math.min(target.i0, run.i0);
+        target.i1 = Math.max(target.i1, run.i1);
+        merged.splice(i, 1);
+        i--;
+        changed = true;
+      }
+    }
   }
 
   // Step 5: rebuild after absorption (merge same-type consecutive)
@@ -206,12 +254,11 @@ export function detectMacroSections(
     }
 
     let dirFinal: "up" | "down" | "flat";
-    const steepUp = pente_max > 10;
-    const steepDown = pente_min < -10;
-    if (Math.abs(avg) <= flatThreshold && !steepUp && !steepDown) {
+    const steepSection = pente_max > 10 || pente_min < -10;
+    if (Math.abs(avg) <= flatThreshold && !steepSection) {
       dirFinal = "flat";
     } else {
-      dirFinal = dir;
+      dirFinal = deniv >= 0 ? "up" : "down";
     }
 
     sections.push({
