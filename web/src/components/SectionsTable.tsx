@@ -3,9 +3,10 @@ import type { SectionData } from "../lib/types";
 interface Props {
   sections: SectionData[];
   onHoverSection: (s: SectionData | null) => void;
+  onClickSection: (n: number) => void;
 }
 
-export default function SectionsTable({ sections, onHoverSection }: Props) {
+export default function SectionsTable({ sections, onHoverSection, onClickSection }: Props) {
   if (sections.length === 0) return null;
 
   return (
@@ -27,16 +28,17 @@ export default function SectionsTable({ sections, onHoverSection }: Props) {
           <th style={thStyle}>Dist.</th>
           <th style={thStyle}>Déniv.</th>
           <th style={thStyle}>Pente moy.</th>
-          <th style={thStyle}>Profil</th>
         </tr>
       </thead>
       <tbody>
         {sections.map((s) => (
           <tr
             key={s.n}
-            style={{ cursor: "pointer" }}
+            onClick={() => onClickSection(s.n)}
             onMouseEnter={() => onHoverSection(s)}
             onMouseLeave={() => onHoverSection(null)}
+            style={{ cursor: "pointer" }}
+            className="section-row"
           >
             <td style={tdStyle}>{s.n}</td>
             <td style={tdStyle}>
@@ -50,14 +52,10 @@ export default function SectionsTable({ sections, onHoverSection }: Props) {
               {s.deniv > 0 ? "+" : ""}{s.deniv.toFixed(0)} m
             </td>
             <td style={tdStyle}>{s.avg.toFixed(1)} %</td>
-            <td style={tdStyle}>
-              <a href={`/section/${s.n}`} style={{ color: "#1f77b4", fontWeight: 600, textDecoration: "none" }}>
-                Ouvrir →
-              </a>
-            </td>
           </tr>
         ))}
       </tbody>
+      <style>{`tr.section-row:hover td { background: #e8edf8; }`}</style>
     </table>
   );
 }

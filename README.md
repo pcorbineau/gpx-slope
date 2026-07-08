@@ -5,28 +5,53 @@ slope, with automatic detection of climbs and descents (sections).
 
 ## Stack
 
-- **Backend:** Bun + Elysia + TypeScript
-- **Frontend:** React + Vite + uPlot
-- **Cache:** Local disk (uploads/)
+- **Backend:** Bun + Elysia (TypeScript)
+- **Frontend:** React + Vite + uPlot (canvas chart, 60fps on large tracks)
+- **Cache:** Local disk (`uploads/`)
+- **Real-time:** WebSocket for analysis progress
 
 ## Run
 
 ```bash
-# Install deps
+# Install dependencies
 bun install
 cd web && bun install && cd ..
 
 # Start backend (port 8765)
-bun run server/index.ts &
+bun run dev:server
 
-# Start frontend dev server (port 5173, proxies API)
+# In another terminal — start frontend (port 5173, proxies API)
 cd web && bun run dev
 
 # Open http://localhost:5173
 ```
 
+## Production build
+
+```bash
+cd web && bun run build
+# Output in web/dist/ — serve static files + proxy /api to backend
+```
+
 ## Features
 
-Same as before: slope-colored profile, custom crosshair, sections table with
-hover highlight, per-section detail page, upload, configurable thresholds,
-disk cache.
+- **Full-course profile** with zoom (mouse wheel, drag, double-click reset) and range slider
+- **Slope coloring** with Tour-de-France scale (green / blue / yellow / orange / red / black)
+- **Custom crosshair** — vertical line + label (km, altitude, slope %) following the cursor
+- **Sections table** — detected climbs and descents with distance, elevation gain, average slope
+  - Hover a row → highlights the section on the profile
+  - Click a row → opens the dedicated per-section page
+- **Upload any GPX** — analysis runs in background, progress via WebSocket
+- **Adjustable thresholds** — minimum distance and elevation for section detection
+- **Persistence** — last GPX, config, and computed result cached on disk
+
+## API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/data` | GET | Cached analysis result (course + sections) |
+| `/api/config` | GET | Current thresholds |
+| `/api/status` | GET | Server status (busy / progress / error) |
+| `/api/upload` | POST | Upload GPX file (multipart) |
+| `/api/recompute` | POST | Re-run analysis with new thresholds |
+| `/ws` | WebSocket | Push progress / done / error messages |

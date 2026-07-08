@@ -147,6 +147,7 @@ export default function ProfilePage() {
             <SectionsTable
               sections={data.sections}
               onHoverSection={setHighlightSection}
+              onClickSection={(n) => window.location.href = `/section/${n}`}
             />
           </>
         ) : (

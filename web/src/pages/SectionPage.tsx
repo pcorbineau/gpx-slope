@@ -75,7 +75,7 @@ export default function SectionPage() {
         cursor: { drag: { x: true, y: true }, points: { show: false } },
         legend: { show: false },
         axes: [
-          { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Distance (km)" },
+          { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Distance (km)", values: (_, ticks) => ticks.map(v => Number(v.toFixed(1)) + "") },
           { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Altitude (m)" },
         ],
         series: [{}, ...series.map((s) => ({ ...s }))],

@@ -72,7 +72,7 @@ export default function ProfileChart({
       select: { show: false } as uPlot.Select,
       legend: { show: false },
       axes: [
-        { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Distance (km)" },
+        { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Distance (km)", values: (_, ticks) => ticks.map(v => Number(v.toFixed(1)) + "") },
         { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Altitude (m)" },
       ],
       series: [
