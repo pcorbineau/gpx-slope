@@ -39,8 +39,9 @@ cd web && bun run build
 - **Slope coloring** with Tour-de-France scale (green / blue / yellow / orange / red / black)
 - **Custom crosshair** — label (km, altitude, slope %) snapped to the elevation line on both the full profile and per-section pages
 - **Sections table** — detected climbs and descents with distance, elevation gain, average/min/max slope, and table-wide sorting by any column
+- **Smart section detection** — hysteresis-based slope classification (±2% entry, ±0.5% exit) absorbs micro-oscillations; short reversals (< 2km) within a dominant direction are merged; sections are trimmed at actual elevation extrema
 - **Upload any GPX** — analysis runs in background, progress via WebSocket
-- **Adjustable thresholds** — minimum distance and elevation for section detection
+- **Adjustable thresholds** — minimum distance and elevation for section filtering
 - **Persistence** — last GPX, config, and computed result cached on disk
 
 ## API
