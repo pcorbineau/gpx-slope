@@ -1,0 +1,22 @@
+.section-infos {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+
+.section-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  font-size: 14px;
+}
+
+.section-card b {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  opacity: .6;
+  margin-bottom: 4px;
+}
