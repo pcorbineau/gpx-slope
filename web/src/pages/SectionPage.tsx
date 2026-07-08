@@ -74,6 +74,9 @@ export default function SectionPage() {
         height: 560,
         cursor: { drag: { x: true, y: true }, points: { show: false } },
         legend: { show: false },
+        scales: {
+          x: { range: [km[0], km[km.length - 1]] },
+        },
         axes: [
           { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Distance (km)", values: (_, ticks) => ticks.map(v => Number(v.toFixed(1)) + "") },
           { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Altitude (m)" },
