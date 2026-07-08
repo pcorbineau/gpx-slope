@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { analyzeGpx, findLocalExtrema, filterAnchors } from "./analyze";
+import { analyzeGpx, findLocalExtrema, filterAnchors, buildSectionsFromAnchors } from "./analyze";
 import { join } from "path";
 
 const FIXTURE = join(import.meta.dir, "__fixtures__", "simple.gpx");
@@ -52,6 +52,33 @@ describe("filterAnchors", () => {
     const filtered = filterAnchors(anchors, ele, km, 30);
     expect(filtered.length).toBe(1);
     expect(filtered[0].type).toBe("peak");
+  });
+});
+
+describe("buildSectionsFromAnchors", () => {
+  it("builds correct sections for simple up-down profile", () => {
+    interface Pt { lat: number; lon: number; ele: number }
+    const pts: Pt[] = [
+      { lat: 0, lon: 0, ele: 100 },
+      { lat: 0, lon: 0, ele: 200 },
+      { lat: 0, lon: 0, ele: 300 },
+      { lat: 0, lon: 0, ele: 200 },
+      { lat: 0, lon: 0, ele: 100 },
+    ];
+    const xs = [0, 100, 200, 300, 400];
+    const ele = [100, 200, 300, 200, 100];
+    const slopes = [0, 100, 100, -100, -100];
+    const anchors = [
+      { type: "peak" as const, index: 2, km: 200, ele: 300 },
+    ];
+    const sections = buildSectionsFromAnchors(pts, xs, ele, slopes, anchors, 3);
+    expect(sections.length).toBe(2);
+    expect(sections[0].dir).toBe("up");
+    expect(sections[0].idx_start).toBe(0);
+    expect(sections[0].idx_end).toBe(2);
+    expect(sections[1].dir).toBe("down");
+    expect(sections[1].idx_start).toBe(2);
+    expect(sections[1].idx_end).toBe(4);
   });
 });
 

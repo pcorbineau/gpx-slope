@@ -199,15 +199,59 @@ export function findLocalExtrema(ele: number[], km: number[]): Anchor[] {
   return anchors;
 }
 
-// -- Section detection -----------------------------------------------------
-interface Step {
-  d: number;
-  dh: number;
-  km: number;
-  i0: number;
-  i1: number;
-  slope: number;
-  dir: "up" | "down" | "flat" | null;
+export function buildSectionsFromAnchors(
+  pts: RawPoint[],
+  xs: number[],
+  eleSmoothed: number[],
+  slopes: number[],
+  anchors: Anchor[],
+  flatThreshold: number
+): SectionData[] {
+  const keyIndices = [0, ...anchors.map((a) => a.index), pts.length - 1];
+  const sections: SectionData[] = [];
+
+  for (let i = 0; i < keyIndices.length - 1; i++) {
+    const i0 = keyIndices[i];
+    const i1 = keyIndices[i + 1];
+
+    if (i0 >= i1) continue;
+
+    const dist = xs[i1] - xs[i0];
+    const deniv = eleSmoothed[i1] - eleSmoothed[i0];
+    const avg = dist > 0 ? (deniv / dist) * 100 : 0;
+
+    let dir: "up" | "down" | "flat";
+    if (Math.abs(avg) <= flatThreshold) {
+      dir = "flat";
+    } else if (deniv > 0) {
+      dir = "up";
+    } else {
+      dir = "down";
+    }
+
+    let pente_min = Infinity;
+    let pente_max = -Infinity;
+    for (let k = i0; k <= i1; k++) {
+      if (slopes[k] < pente_min) pente_min = slopes[k];
+      if (slopes[k] > pente_max) pente_max = slopes[k];
+    }
+
+    sections.push({
+      n: 0,
+      dir,
+      start_km: Math.round((xs[i0] / 1000) * 1000) / 1000,
+      end_km: Math.round((xs[i1] / 1000) * 1000) / 1000,
+      dist_km: Math.round((dist / 1000) * 1000) / 1000,
+      deniv: Math.round(deniv * 10) / 10,
+      avg: Math.round(avg * 10) / 10,
+      pente_min: Math.round(pente_min * 10) / 10,
+      pente_max: Math.round(pente_max * 10) / 10,
+      idx_start: i0,
+      idx_end: i1,
+    });
+  }
+
+  return sections;
 }
 
 // -- Public API ------------------------------------------------------------
