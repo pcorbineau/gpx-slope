@@ -127,6 +127,59 @@ interface Anchor {
   ele: number;
 }
 
+export function filterAnchors(
+  anchors: Anchor[],
+  ele: number[],
+  km: number[],
+  minDeniv: number
+): Anchor[] {
+  if (anchors.length === 0) return [];
+
+  const result: Anchor[] = [];
+
+  for (let i = 0; i < anchors.length; i++) {
+    const a = anchors[i];
+    const leftIdx = i > 0 ? anchors[i - 1].index : 0;
+    const rightIdx = i < anchors.length - 1 ? anchors[i + 1].index : ele.length - 1;
+
+    if (a.type === "peak") {
+      const leftEle = ele[leftIdx];
+      const rightEle = ele[rightIdx];
+      const prominence = a.ele - Math.max(leftEle, rightEle);
+      if (prominence >= minDeniv) {
+        result.push(a);
+      }
+    } else {
+      const leftEle = ele[leftIdx];
+      const rightEle = ele[rightIdx];
+      const prominence = Math.min(leftEle, rightEle) - a.ele;
+      if (prominence >= minDeniv) {
+        result.push(a);
+      }
+    }
+  }
+
+  const deduped: Anchor[] = [];
+  for (const a of result) {
+    if (deduped.length > 0 && deduped[deduped.length - 1].type === a.type) {
+      const prev = deduped[deduped.length - 1];
+      if (a.type === "peak") {
+        if (a.ele > prev.ele) {
+          deduped[deduped.length - 1] = a;
+        }
+      } else {
+        if (a.ele < prev.ele) {
+          deduped[deduped.length - 1] = a;
+        }
+      }
+    } else {
+      deduped.push(a);
+    }
+  }
+
+  return deduped;
+}
+
 export function findLocalExtrema(ele: number[], km: number[]): Anchor[] {
   const n = ele.length;
   const anchors: Anchor[] = [];

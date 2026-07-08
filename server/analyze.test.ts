@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { analyzeGpx, findLocalExtrema } from "./analyze";
+import { analyzeGpx, findLocalExtrema, filterAnchors } from "./analyze";
 import { join } from "path";
 
 const FIXTURE = join(import.meta.dir, "__fixtures__", "simple.gpx");
@@ -31,6 +31,27 @@ describe("findLocalExtrema", () => {
     const peaks = anchors.filter((a) => a.type === "peak");
     expect(peaks.length).toBe(1);
     expect(peaks[0].index).toBe(2);
+  });
+});
+
+describe("filterAnchors", () => {
+  it("removes insignificant peaks below minDeniv", () => {
+    const ele = [100, 200, 210, 200, 300, 200, 100];
+    const km = [0, 1, 2, 3, 4, 5, 6];
+    const anchors = findLocalExtrema(ele, km);
+    const filtered = filterAnchors(anchors, ele, km, 30);
+    const peaks = filtered.filter((a) => a.type === "peak");
+    expect(peaks.length).toBe(1);
+    expect(peaks[0].index).toBe(4);
+  });
+
+  it("keeps significant peaks", () => {
+    const ele = [100, 200, 350, 200, 100];
+    const km = [0, 1, 2, 3, 4];
+    const anchors = findLocalExtrema(ele, km);
+    const filtered = filterAnchors(anchors, ele, km, 30);
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].type).toBe("peak");
   });
 });
 
