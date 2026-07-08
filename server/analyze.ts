@@ -240,24 +240,34 @@ export function detectMacroSections(
   }
 
   // Step 5b: split runs at significant local direction reversals
-  //   - within a down run: find local minima where the following climb >= minDeniv
-  //   - within an up run: find local maxima where the following drop >= minDeniv
-  //   - this preserves real climbs within a big descent (and vice versa)
+  //   - within a down run: split at local minima where the following climb
+  //     is larger than the net drop from the min to the run's end
+  //   - within an up run: split at local maxima where the following drop
+  //     is larger than the net gain from the peak to the run's end
+  //   - this avoids splitting minor wiggles that are recovered (e.g. a 30m
+  //     dip within a long climb), while preserving real reversals (e.g. a
+  //     237m climb within a long descent)
   const trimmed: Run[] = [];
   for (const run of final) {
     if (run.dir === "down") {
       let segStart = run.i0;
       for (let k = run.i0 + 1; k < run.i1; k++) {
         if (ele[k] < ele[k - 1] && ele[k] <= ele[k + 1]) {
-          // Local minimum at k — find the following peak
+          // valley at k — find the following peak
           let peakK = k + 1;
           while (peakK < run.i1 && ele[peakK] >= ele[peakK - 1]) peakK++;
           peakK--;
           const rise = ele[peakK] - ele[k];
-          if (rise >= minDeniv) {
+          if (rise >= minDeniv && rise * 2 >= Math.abs(ele[run.i1] - ele[k])) {
             const drop = ele[k] - ele[segStart];
             trimmed.push({ dir: drop <= 0 ? "down" : "flat", i0: segStart, i1: k });
-            segStart = k;
+            // For substantial reversals (> 60m), also create the climb segment
+            if (rise >= minDeniv * 2) {
+              trimmed.push({ dir: "flat", i0: k, i1: peakK });
+              segStart = peakK;
+            } else {
+              segStart = k;
+            }
           }
         }
       }
@@ -269,14 +279,21 @@ export function detectMacroSections(
       let segStart = run.i0;
       for (let k = run.i0 + 1; k < run.i1; k++) {
         if (ele[k] > ele[k - 1] && ele[k] >= ele[k + 1]) {
+          // peak at k — find the following valley
           let valleyK = k + 1;
           while (valleyK < run.i1 && ele[valleyK] <= ele[valleyK - 1]) valleyK++;
           valleyK--;
           const drop = ele[k] - ele[valleyK];
-          if (drop >= minDeniv) {
+          if (drop >= minDeniv && drop * 2 >= Math.abs(ele[run.i1] - ele[k])) {
             const rise = ele[k] - ele[segStart];
             trimmed.push({ dir: rise >= 0 ? "up" : "flat", i0: segStart, i1: k });
-            segStart = k;
+            // For substantial reversals (> 60m), also create the descent segment
+            if (drop >= minDeniv * 2) {
+              trimmed.push({ dir: "flat", i0: k, i1: valleyK });
+              segStart = valleyK;
+            } else {
+              segStart = k;
+            }
           }
         }
       }
