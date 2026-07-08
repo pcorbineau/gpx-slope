@@ -1,0 +1,137 @@
+import { useRef, useEffect } from "react";
+import uPlot, { type AlignedData } from "uplot";
+import "uplot/dist/uPlot.min.css";
+import type { CourseData } from "../lib/types";
+import { slopeColor } from "../lib/colors";
+import "./ProfileChart.css";
+
+interface Props {
+  course: CourseData;
+  highlightRange?: [number, number] | null;
+  highlightColor?: string;
+}
+
+export default function ProfileChart({
+  course,
+  highlightRange,
+  highlightColor = "rgba(44,162,95,0.18)",
+}: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<uPlot | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const { km, ele, slope } = course;
+    if (km.length < 2) return;
+
+    const rawData: (number | null)[][] = [];
+    const series: uPlot.Series[] = [];
+
+    rawData.push(km.slice());
+    series.push({
+      label: "elevation",
+      fill: "rgba(230,230,230,0.6)",
+      stroke: "rgba(230,230,230,0)",
+      width: 0,
+    });
+
+    let i = 1;
+    while (i < km.length) {
+      const c = slopeColor(slope[i]);
+      let j = i;
+      while (j < km.length && slopeColor(slope[j]) === c) j++;
+
+      const xs: (number | null)[] = new Array(km.length).fill(null);
+      const ys: (number | null)[] = new Array(ele.length).fill(null);
+      for (let k = i - 1; k <= j && k < km.length; k++) {
+        xs[k] = km[k];
+        ys[k] = ele[k];
+      }
+
+      rawData.push(xs);
+      series.push({
+        label: c,
+        fill: c + "99",
+        stroke: c,
+        width: 3,
+      });
+
+      i = j;
+    }
+
+    const opts: uPlot.Options = {
+      width: containerRef.current.clientWidth,
+      height: 620,
+      cursor: {
+        show: true,
+        drag: { x: true, y: true },
+        points: { show: false },
+      },
+      select: { show: false } as uPlot.Select,
+      legend: { show: false },
+      axes: [
+        { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Distance (km)" },
+        { stroke: "#666", grid: { stroke: "rgba(0,0,0,0.06)" }, label: "Altitude (m)" },
+      ],
+      series: [
+        {},
+        ...series.map((s) => ({
+          ...s,
+          points: { show: false } as uPlot.Series.Points,
+        })),
+      ],
+      hooks: {
+        ready: [(u) => {
+          chartRef.current = u;
+        }],
+        setCursor: [
+          (u) => {
+            const label = containerRef.current?.querySelector(".crosshair-label") as HTMLElement | null;
+            if (!label || u.cursor.idx == null) return;
+            const idx: number = u.cursor.idx;
+            const kmVal = km[idx];
+            const eleVal = ele[idx];
+            const slopeVal = slope[idx];
+            label.textContent =
+              `km ${kmVal.toFixed(2)} · alt ${eleVal.toFixed(0)} m · pente ${slopeVal.toFixed(1)} %`;
+          },
+        ],
+      },
+    };
+
+    const chart = new uPlot(opts, rawData as AlignedData, containerRef.current);
+
+    return () => {
+      chart.destroy();
+      chartRef.current = null;
+    };
+  }, [course]);
+
+  useEffect(() => {
+    if (!chartRef.current || !highlightRange || !containerRef.current) return;
+    const u = chartRef.current;
+    const p0 = u.valToPos(highlightRange[0], "x");
+    const p1 = u.valToPos(highlightRange[1], "x");
+    const left = Math.min(p0, p1);
+    const width = Math.abs(p1 - p0);
+
+    let overlay = containerRef.current.querySelector(".section-overlay") as HTMLElement | null;
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "section-overlay";
+      overlay.style.cssText =
+        "position:absolute;top:0;bottom:0;pointer-events:none;z-index:5;";
+      containerRef.current.appendChild(overlay);
+    }
+    overlay.style.left = `${left}px`;
+    overlay.style.width = `${width}px`;
+    overlay.style.background = highlightColor;
+  }, [highlightRange, highlightColor, course.km]);
+
+  return (
+    <div className="chart-wrapper" ref={containerRef}>
+      <div className="crosshair-label">Survolez le graphique</div>
+    </div>
+  );
+}
