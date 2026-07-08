@@ -18,6 +18,11 @@ export default function ProfileChart({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<uPlot | null>(null);
+  const highlightRef = useRef<{ range: [number, number]; color: string } | null>(null);
+
+  highlightRef.current = highlightRange
+    ? { range: highlightRange, color: highlightColor }
+    : null;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -43,10 +48,8 @@ export default function ProfileChart({
       let j = i;
       while (j < km.length && slopeColor(slope[j]) === c) j++;
 
-      const xs: (number | null)[] = new Array(km.length).fill(null);
       const ys: (number | null)[] = new Array(ele.length).fill(null);
       for (let k = i - 1; k <= j && k < km.length; k++) {
-        xs[k] = km[k];
         ys[k] = ele[k];
       }
 
@@ -86,6 +89,19 @@ export default function ProfileChart({
         ready: [(u) => {
           chartRef.current = u;
         }],
+        draw: [
+          (u) => {
+            const h = highlightRef.current;
+            if (!h) return;
+            const p0 = u.valToPos(h.range[0], "x");
+            const p1 = u.valToPos(h.range[1], "x");
+            const left = Math.min(p0, p1);
+            const width = Math.abs(p1 - p0);
+            const { ctx } = u;
+            ctx.fillStyle = h.color;
+            ctx.fillRect(left, u.bbox.top, width, u.bbox.height);
+          },
+        ],
         setCursor: [
           (u) => {
             const label = containerRef.current?.querySelector(".crosshair-label") as HTMLElement | null;
@@ -108,27 +124,6 @@ export default function ProfileChart({
       chartRef.current = null;
     };
   }, [course]);
-
-  useEffect(() => {
-    if (!chartRef.current || !highlightRange || !containerRef.current) return;
-    const u = chartRef.current;
-    const p0 = u.valToPos(highlightRange[0], "x");
-    const p1 = u.valToPos(highlightRange[1], "x");
-    const left = Math.min(p0, p1);
-    const width = Math.abs(p1 - p0);
-
-    let overlay = containerRef.current.querySelector(".section-overlay") as HTMLElement | null;
-    if (!overlay) {
-      overlay = document.createElement("div");
-      overlay.className = "section-overlay";
-      overlay.style.cssText =
-        "position:absolute;top:0;bottom:0;pointer-events:none;z-index:5;";
-      containerRef.current.appendChild(overlay);
-    }
-    overlay.style.left = `${left}px`;
-    overlay.style.width = `${width}px`;
-    overlay.style.background = highlightColor;
-  }, [highlightRange, highlightColor, course.km]);
 
   return (
     <div className="chart-wrapper" ref={containerRef}>
