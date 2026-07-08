@@ -448,6 +448,7 @@ export function analyzeGpx(
       const deniv = s.deniv + prev.deniv;
       const avg = dist > 0 ? (deniv / dist) * 100 : 0;
       prev.end_km = s.end_km;
+      prev.idx_end = s.idx_end;
       prev.dist_km = Math.round((dist / 1000) * 1000) / 1000;
       prev.deniv = Math.round(deniv * 10) / 10;
       prev.avg = Math.round(avg * 10) / 10;
