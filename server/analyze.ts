@@ -119,6 +119,14 @@ function computeSlopes(xs: number[], eleSmoothed: number[], window: number): num
   return slopes;
 }
 
+// -- Anchor type for new detection algo ------------------------------------
+interface Anchor {
+  type: "peak" | "valley";
+  index: number;
+  km: number;
+  ele: number;
+}
+
 // -- Section detection -----------------------------------------------------
 interface Step {
   d: number;
@@ -143,7 +151,7 @@ export interface CourseData {
 
 export interface SectionData {
   n: number;
-  dir: "up" | "down";
+  dir: "up" | "down" | "flat";
   start_km: number;
   end_km: number;
   dist_km: number;

@@ -10,7 +10,7 @@ export interface CourseData {
 
 export interface SectionData {
   n: number;
-  dir: "up" | "down";
+  dir: "up" | "down" | "flat";
   start_km: number;
   end_km: number;
   dist_km: number;
