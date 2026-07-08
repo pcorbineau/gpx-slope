@@ -119,114 +119,64 @@ function computeSlopes(xs: number[], eleSmoothed: number[], window: number): num
   return slopes;
 }
 
-// -- Anchor type for new detection algo ------------------------------------
-interface Anchor {
-  type: "peak" | "valley";
-  index: number;
-  km: number;
-  ele: number;
-}
-
-export function filterAnchors(
-  anchors: Anchor[],
-  ele: number[],
-  km: number[],
-  minDeniv: number
-): Anchor[] {
-  if (anchors.length === 0) return [];
-
-  const result: Anchor[] = [];
-
-  for (let i = 0; i < anchors.length; i++) {
-    const a = anchors[i];
-    const leftIdx = i > 0 ? anchors[i - 1].index : 0;
-    const rightIdx = i < anchors.length - 1 ? anchors[i + 1].index : ele.length - 1;
-
-    if (a.type === "peak") {
-      const leftEle = ele[leftIdx];
-      const rightEle = ele[rightIdx];
-      const prominence = a.ele - Math.max(leftEle, rightEle);
-      if (prominence >= minDeniv) {
-        result.push(a);
-      }
-    } else {
-      const leftEle = ele[leftIdx];
-      const rightEle = ele[rightIdx];
-      const prominence = Math.min(leftEle, rightEle) - a.ele;
-      if (prominence >= minDeniv) {
-        result.push(a);
-      }
-    }
-  }
-
-  const deduped: Anchor[] = [];
-  for (const a of result) {
-    if (deduped.length > 0 && deduped[deduped.length - 1].type === a.type) {
-      const prev = deduped[deduped.length - 1];
-      if (a.type === "peak") {
-        if (a.ele > prev.ele) {
-          deduped[deduped.length - 1] = a;
-        }
-      } else {
-        if (a.ele < prev.ele) {
-          deduped[deduped.length - 1] = a;
-        }
-      }
-    } else {
-      deduped.push(a);
-    }
-  }
-
-  return deduped;
-}
-
-export function findLocalExtrema(ele: number[], km: number[]): Anchor[] {
-  const n = ele.length;
-  const anchors: Anchor[] = [];
-
-  for (let i = 1; i < n - 1; i++) {
-    const curr = ele[i];
-    const prev = ele[i - 1];
-    const next = ele[i + 1];
-
-    if (curr > prev && curr >= next) {
-      anchors.push({ type: "peak", index: i, km: km[i], ele: curr });
-    } else if (curr < prev && curr <= next) {
-      anchors.push({ type: "valley", index: i, km: km[i], ele: curr });
-    }
-  }
-
-  return anchors;
-}
-
-export function buildSectionsFromAnchors(
-  pts: RawPoint[],
+export function detectMacroSections(
   xs: number[],
-  eleSmoothed: number[],
+  ele: number[],
   slopes: number[],
-  anchors: Anchor[],
+  minDeniv: number,
   flatThreshold: number
 ): SectionData[] {
-  const keyIndices = [0, ...anchors.map((a) => a.index), pts.length - 1];
+  const n = ele.length;
+  const raw: { i0: number; i1: number; dir: "up" | "down" | "flat" }[] = [];
+
+  let segStart = 0;
+  let dir: "up" | "down" | "flat" | null = null;
+  let extremeIdx = 0;
+
+  for (let i = 1; i < n; i++) {
+    if (dir === null) {
+      const cum = ele[i] - ele[segStart];
+      if (Math.abs(cum) >= minDeniv) {
+        dir = cum > 0 ? "up" : "down";
+        extremeIdx = i;
+      }
+    } else if (dir === "up") {
+      if (ele[i] > ele[extremeIdx]) extremeIdx = i;
+      if (ele[extremeIdx] - ele[i] >= minDeniv) {
+        raw.push({ i0: segStart, i1: extremeIdx, dir });
+        segStart = extremeIdx;
+        dir = null;
+        extremeIdx = segStart;
+      }
+    } else if (dir === "down") {
+      if (ele[i] < ele[extremeIdx]) extremeIdx = i;
+      if (ele[i] - ele[extremeIdx] >= minDeniv) {
+        raw.push({ i0: segStart, i1: extremeIdx, dir });
+        segStart = extremeIdx;
+        dir = null;
+        extremeIdx = segStart;
+      }
+    }
+  }
+
+  if (dir !== null) {
+    raw.push({ i0: segStart, i1: extremeIdx, dir });
+  }
+
   const sections: SectionData[] = [];
 
-  for (let i = 0; i < keyIndices.length - 1; i++) {
-    const i0 = keyIndices[i];
-    const i1 = keyIndices[i + 1];
-
-    if (i0 >= i1) continue;
+  for (let r = 0; r < raw.length; r++) {
+    const { i0, i1, dir: d } = raw[r];
 
     const dist = xs[i1] - xs[i0];
-    const deniv = eleSmoothed[i1] - eleSmoothed[i0];
+    const deniv = ele[i1] - ele[i0];
     const avg = dist > 0 ? (deniv / dist) * 100 : 0;
 
-    let dir: "up" | "down" | "flat";
+    let dirFinal: "up" | "down" | "flat";
     if (Math.abs(avg) <= flatThreshold) {
-      dir = "flat";
-    } else if (deniv > 0) {
-      dir = "up";
+      dirFinal = "flat";
     } else {
-      dir = "down";
+      dirFinal = d;
     }
 
     let pente_min = Infinity;
@@ -238,7 +188,7 @@ export function buildSectionsFromAnchors(
 
     sections.push({
       n: 0,
-      dir,
+      dir: dirFinal,
       start_km: Math.round((xs[i0] / 1000) * 1000) / 1000,
       end_km: Math.round((xs[i1] / 1000) * 1000) / 1000,
       dist_km: Math.round((dist / 1000) * 1000) / 1000,
@@ -347,9 +297,7 @@ export function analyzeGpx(
   const FLAT_THRESHOLD = 3;
   const MAX_FLAT_MERGE_M = 500;
 
-  const anchors_raw = findLocalExtrema(eleSmoothed, xs);
-  const anchors = filterAnchors(anchors_raw, eleSmoothed, xs, MIN_PEAK_DENIV);
-  let sections = buildSectionsFromAnchors(pts, xs, eleSmoothed, slopes, anchors, FLAT_THRESHOLD);
+  let sections = detectMacroSections(xs, eleSmoothed, slopes, MIN_PEAK_DENIV, FLAT_THRESHOLD);
   sections = mergeFlatSections(sections, MAX_FLAT_MERGE_M);
 
   const filtered = sections.filter((s) => {
