@@ -40,6 +40,7 @@ export default function SectionPage() {
     const series: uPlot.Series[] = [];
 
     rawData.push(km.slice());
+    rawData.push(ele.slice());
     series.push({
       label: "elevation",
       fill: "rgba(230,230,230,0.6)",
@@ -52,13 +53,11 @@ export default function SectionPage() {
       const c = slopeColor(slope[i]);
       let j = i;
       while (j < km.length && slopeColor(slope[j]) === c) j++;
-      const xs: (number | null)[] = new Array(km.length).fill(null);
       const ys: (number | null)[] = new Array(ele.length).fill(null);
       for (let k = i - 1; k <= j && k < km.length; k++) {
-        xs[k] = km[k];
         ys[k] = ele[k];
       }
-      rawData.push(xs);
+      rawData.push(ys);
       series.push({
         label: c,
         fill: c + "99",

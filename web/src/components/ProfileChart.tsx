@@ -29,6 +29,7 @@ export default function ProfileChart({
     const series: uPlot.Series[] = [];
 
     rawData.push(km.slice());
+    rawData.push(ele.slice());
     series.push({
       label: "elevation",
       fill: "rgba(230,230,230,0.6)",
@@ -49,7 +50,7 @@ export default function ProfileChart({
         ys[k] = ele[k];
       }
 
-      rawData.push(xs);
+      rawData.push(ys);
       series.push({
         label: c,
         fill: c + "99",
